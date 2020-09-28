@@ -99,7 +99,7 @@ public class FileUploadServlet extends HttpServlet {
         res.setHeader("Connection", req.getHeader("Connection"));
         // 授权信息
         if (req.getHeader("Authorization") == null) {
-            res.sendError(HttpServletResponse.SC_UNAUTHORIZED);
+            // res.sendError(HttpServletResponse.SC_UNAUTHORIZED);
         }
         PrintWriter writer = res.getWriter();
         JSONObject jo = new JSONObject();
@@ -107,7 +107,7 @@ public class FileUploadServlet extends HttpServlet {
         boolean isMultipart = ServletFileUpload.isMultipartContent(req);
         if (isMultipart) {
             try {
-                String fileName, uuidName, fullName;
+                String fileName, uuidName, fullName, extPath = "";
                 DiskFileItemFactory factory = new DiskFileItemFactory();
                 factory.setRepository(new File(this.uploadPath));
                 // 创建一个ServletFileUpload核心对象
@@ -115,28 +115,41 @@ public class FileUploadServlet extends HttpServlet {
                 uploadHandler.setHeaderEncoding(CHARSET);
                 // 获取上传内容
                 List<FileItem> items = uploadHandler.parseRequest(req);
+                // 拼接存放路径
                 for (FileItem item : items) {
                     if (item.isFormField()) {
-                        item.getFieldName();
-                    } else {
+                        extPath += item.getFieldName() + "/" + item.getString() + "/";
+                    }
+                }
+                for (FileItem item : items) {
+                    if (!item.isFormField()) {
                         fileName = item.getName();
                         uuidName = UUID.randomUUID().toString().replace("-", "") + fileName.substring(fileName.lastIndexOf("."));
-                        fullName = this.uploadPath + uuidName;
+                        if ("".equals(extPath)) {
+                            fullName = this.uploadPath + uuidName;
+                        } else {
+                            createDirectory(this.uploadPath + extPath);
+                            fullName = this.uploadPath + extPath + uuidName;
+                        }
                         File file = new File(fullName);
                         item.write(file);
                         item.delete();
                         JSONObject f = new JSONObject();
                         f.put("name", fileName);
                         f.put("uid", uuidName);
-                        f.put("url", url + "/FileUploadServer/resources/" + uuidName);
-                        //f.put("thumbUrl", url + "/FileUploadServer/resources/" + uuidName);
+                        if ("".equals(extPath)) {
+                            f.put("url", url + "/FileUploadServer/resources/" + uuidName);
+                        } else {
+                            f.put("url", url + "/FileUploadServer/resources/" + extPath + uuidName);
+                        }
+                        // f.put("thumbUrl", url + "/FileUploadServer/resources/" + uuidName);
                         ja.put(f);
                         jo.put("files", ja);
                     }
                 }
                 jo.put("code", "200");
                 jo.put("msg", "success");
-                log4j.info(jo.toString());
+                // log4j.info(jo.toString());
             } catch (Exception ex) {
                 jo.put("code", "500");
                 jo.put("msg", ex.getMessage());
@@ -174,19 +187,20 @@ public class FileUploadServlet extends HttpServlet {
         super.init(config);
         this.uploadPath = config.getServletContext().getRealPath("/") + config.getInitParameter("UploadPath");
         this.backupPath = config.getInitParameter("BackupPath");
-        File path;
-        path = new File(this.uploadPath);
-        if (!path.isDirectory()) {
-            path.mkdirs();
-        }
+        createDirectory(this.uploadPath);
         if (!"none".equals(this.backupPath)) {
-            path = new File(this.backupPath);
-            if (!path.isDirectory()) {
-                path.mkdirs();
-            }
+            createDirectory(this.backupPath);
             backup = true;
         }
         this.url = config.getInitParameter("url");
+    }
+
+    private void createDirectory(String directory) {
+        File path;
+        path = new File(directory);
+        if (!path.isDirectory()) {
+            path.mkdirs();
+        }
     }
 
 }
